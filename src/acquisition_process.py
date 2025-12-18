@@ -24,6 +24,10 @@ def BALD(predictions):
     """BALD acquisition function.
     Predictions shape expected: (T, num_samples, num_classes) as torch tensor"""
 
+    if predictions.shape[0] == 1:
+        # Deterministic model case: return zeros
+        return torch.zeros(predictions.shape[1])
+
     entropy = max_entropy(predictions)  # Shape: (num_samples,)
     expected_entropy = -torch.sum(predictions * torch.log(predictions + 1e-10), dim=2).mean(dim=0)  # Shape: (num_samples,)
 
@@ -73,8 +77,12 @@ def get_acquisition_points(acq_function, predictions, num_points=10):
     Returns indices of selected points."""
 
     scores = acq_function(predictions)  # Shape: (num_samples,)
-    _, selected_indices = torch.topk(scores, num_points)
-
+    # For deterministic bald, scores will all be the same so take random indices
+    if scores.max() - scores.min() < 1e-4:
+        perm = torch.randperm(scores.size(0))
+        selected_indices = perm[:num_points]
+    else:
+        _, selected_indices = torch.topk(scores, num_points)
     return selected_indices
 
 

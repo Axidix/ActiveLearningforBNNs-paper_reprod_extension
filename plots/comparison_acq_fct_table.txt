@@ -1,0 +1,15 @@
+Values are rounded up to the next integer (ceil) for each run.
+Target error: 0.10 (accuracy 90.00%)
+  bald: 313 ± 57.8 images
+  variation_ratios: 269 ± 26.5 images
+  entropy: 292 ± 24.7 images
+  mean_std: Did not reach target error 0.10
+  random: 321 ± 69.6 images
+
+Target error: 0.05 (accuracy 95.00%)
+  bald: 609 ± 29.5 images
+  variation_ratios: 587 ± 30.6 images
+  entropy: 560 ± 26.3 images
+  mean_std: Did not reach target error 0.05
+  random: 903 ± 60.8 images
+

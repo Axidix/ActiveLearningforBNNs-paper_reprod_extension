@@ -27,7 +27,7 @@ if __name__ == "__main__":
 			num_acq_steps=num_acq_steps,
 			acq_size=acq_size,
 			num_epochs=num_epochs,
-			T=10
+			T=20
 		)
 		all_histories = np.array(all_histories)  # shape: (num_repeats, num_acq_steps, 2)
 
@@ -45,7 +45,8 @@ if __name__ == "__main__":
 	plt.ylabel("Test Accuracy (%)")
 	plt.title("MNIST Test Accuracy vs. Number of Acquired Images")
 	plt.legend()
-	plt.grid(True)
+	plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
+	plt.minorticks_on()
 	plt.tight_layout()
 	plt.savefig(PLOT_PATH)
 	print(f"Plot saved to {PLOT_PATH}")
