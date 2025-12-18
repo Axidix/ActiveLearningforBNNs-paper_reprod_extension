@@ -28,7 +28,7 @@ def BALD(predictions):
         # Deterministic model case: return zeros
         return torch.zeros(predictions.shape[1])
 
-    entropy = max_entropy(predictions)  # Shape: (num_samples,)
+    entropy = max_entropy(predictions)  # (num_samples,)
     expected_entropy = -torch.sum(predictions * torch.log(predictions + 1e-10), dim=2).mean(dim=0)  # Shape: (num_samples,)
 
     return entropy - expected_entropy
@@ -40,8 +40,11 @@ def mean_std(predictions):
 
     exp_of_squares = (predictions ** 2).mean(dim=0)  # Shape: (num_samples, num_classes)
     expectation = predictions.mean(dim=0)
+    var = exp_of_squares - expectation ** 2
+    var = torch.clamp(var, min=0.0)
+    std = torch.sqrt(var)
 
-    return torch.sqrt(exp_of_squares - expectation ** 2).mean(dim=1)  # Shape: (num_samples,)
+    return std.mean(dim=1)  # (num_samples,)
 
 
 def random_acquisition(predictions):
