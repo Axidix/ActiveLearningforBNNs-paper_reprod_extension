@@ -124,12 +124,12 @@ def run_exp_deterministic_once(acq_function, num_acq_steps, acq_size, num_epochs
         )
         print("Data loaders updated.")
 
-        """# Reset model, optimizer, and criterion at each acquisition step
+        # Reset model, optimizer, and criterion at each acquisition step
         model = PaperCNN().to(device)
         optim = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
         criterion = torch.nn.CrossEntropyLoss() 
-        """
         
+
         train_model(model, train_loader, val_loader, criterion, optim, device, num_epochs=num_epochs)
         print("Model trained.")
 

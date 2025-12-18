@@ -83,3 +83,24 @@ def evaluate_accuracy_mc_dropout(model, data_loader, device, T=20):
 
     accuracy = 100 * correct / total
     return accuracy
+
+
+def eval_rmse(model, bayes_last_layer, test_loader, params, device):
+    """Evaluate RMSE on test set for regression tasks using Bayesian last layer.
+    Implemented for minimal extension task."""
+    model.eval()
+    se_sum = 0.0
+    n_sum = 0
+
+    with torch.no_grad():
+        for inputs, targets in test_loader:
+            inputs = inputs.to(device)
+            targets = targets.to(device)
+
+            Phi = model.forward_features(inputs)
+            mean, _  = bayes_last_layer.predictive(Phi, params)
+            diff2 = (mean - targets)**2
+            se_sum += diff2.sum().item()
+            n_sum += diff2.numel()
+
+    return (se_sum / n_sum) ** 0.5

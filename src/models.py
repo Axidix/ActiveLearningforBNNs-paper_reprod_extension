@@ -27,3 +27,14 @@ class PaperCNN(nn.Module):
         #x = F.softmax(x, dim=1) # Softmax will be applied in loss function (CrossEntropyLoss)
    
         return x
+    
+    def forward_features(self, x):
+        # everything up to last linear layer (minimal extension task - last layer is bayesian)
+        x = F.relu(self.conv1(x))
+        x = self.pool(F.relu(self.conv2(x)))
+
+        # No dropout here; only feature extraction
+        x = x.view(-1, 32 * 11 * 11)
+        x = F.relu(self.dense1(x))
+        
+        return x

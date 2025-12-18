@@ -111,6 +111,7 @@ def acquire_and_add_points(model, T, pool_loader, acquisition_function, num_poin
             all_predictions.append(preds)
 
     all_predictions = torch.cat(all_predictions, dim=1)  # Shape: (T, num_pool_samples, num_classes)
+    print("Predictions computed.")
 
     # Get acquisition scores
     top_indices = get_acquisition_points(acquisition_function, all_predictions, num_points=num_points)
@@ -125,5 +126,6 @@ def acquire_and_add_points(model, T, pool_loader, acquisition_function, num_poin
 
     # Remove acquired indices from pool set
     pool_indices[:] = list(set(pool_indices) - set(acquired_indices))
+    print("Acquired points added to training set.")
 
     return train_indices, pool_indices

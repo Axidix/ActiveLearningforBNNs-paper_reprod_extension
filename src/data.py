@@ -54,6 +54,15 @@ def get_data_loaders(orig_trainset, testset, train_indices, val_indices, pool_in
     return train_loader, val_loader, pool_loader, test_loader
 
 
+
+
+
+
+
+
+
+
+
 # Test
 if __name__ == "__main__":
     orig_trainset, testset, train_indices, val_indices, pool_indices = load_mnist()
