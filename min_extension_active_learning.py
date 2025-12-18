@@ -42,7 +42,7 @@ def run_min_extension_active_learning(
     # Pretrain CNN feature extractor
     model = PaperCNN(num_classes=10).to(device)
     criterion = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     train_loader, val_loader, _, _ = get_data_loaders(
         orig_trainset, testset, train_indices, val_indices, pool_indices,
         train_batch_size, train_batch_size, pool_batch_size, test_batch_size

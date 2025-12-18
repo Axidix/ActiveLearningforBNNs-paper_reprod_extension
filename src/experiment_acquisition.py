@@ -17,7 +17,7 @@ def run_experiment_once(acq_function, num_acq_steps, acq_size, num_epochs, T):
     # Create data loaders
     train_loader, val_loader, pool_loader, test_loader = get_data_loaders(
         orig_trainset, testset, train_indices, val_indices, pool_indices,
-        train_batch_size=16, val_batch_size=16, pool_batch_size=512, test_batch_size=1024
+        train_batch_size=16, val_batch_size=16, pool_batch_size=128, test_batch_size=256
     )
     print("Initial data loaders created.")
 
@@ -25,7 +25,7 @@ def run_experiment_once(acq_function, num_acq_steps, acq_size, num_epochs, T):
 
     # Initial train/eval
     model = PaperCNN().to(device)
-    optim = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
+    optim = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
     criterion = torch.nn.CrossEntropyLoss()
     train_model(model, train_loader, val_loader, criterion, optim, device, num_epochs=num_epochs)
     test_acc = evaluate_accuracy_mc_dropout(model, test_loader, device, T=T)
@@ -47,13 +47,13 @@ def run_experiment_once(acq_function, num_acq_steps, acq_size, num_epochs, T):
         # Update data loaders with new indices
         train_loader, val_loader, pool_loader, _ = get_data_loaders(
             orig_trainset, testset, train_indices, val_indices, pool_indices,
-            train_batch_size=16, val_batch_size=16, pool_batch_size=512, test_batch_size=1024
+            train_batch_size=16, val_batch_size=16, pool_batch_size=128, test_batch_size=256
         )
         print("Data loaders updated.")
 
         # Reset model, optimizer, and criterion at each acquisition step
         model = PaperCNN().to(device)
-        optim = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
+        optim = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
         criterion = torch.nn.CrossEntropyLoss()
         train_model(model, train_loader, val_loader, criterion, optim, device, num_epochs=num_epochs)
         print("Model trained.")
@@ -90,7 +90,7 @@ def run_exp_deterministic_once(acq_function, num_acq_steps, acq_size, num_epochs
     # Create data loaders
     train_loader, val_loader, pool_loader, test_loader = get_data_loaders(
         orig_trainset, testset, train_indices, val_indices, pool_indices,
-        train_batch_size=16, val_batch_size=16, pool_batch_size=512, test_batch_size=1024
+        train_batch_size=16, val_batch_size=16, pool_batch_size=128, test_batch_size=1024
     )
     print("Initial data loaders created.")
 
@@ -98,7 +98,7 @@ def run_exp_deterministic_once(acq_function, num_acq_steps, acq_size, num_epochs
 
     # Initial train/eval
     model = PaperCNN().to(device)
-    optim = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
+    optim = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
     criterion = torch.nn.CrossEntropyLoss()
     train_model(model, train_loader, val_loader, criterion, optim, device, num_epochs=num_epochs)
     test_acc = evaluate_accuracy_base(model, test_loader, device)
@@ -126,7 +126,7 @@ def run_exp_deterministic_once(acq_function, num_acq_steps, acq_size, num_epochs
 
         # Reset model, optimizer, and criterion at each acquisition step
         model = PaperCNN().to(device)
-        optim = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
+        optim = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
         criterion = torch.nn.CrossEntropyLoss() 
         
 
