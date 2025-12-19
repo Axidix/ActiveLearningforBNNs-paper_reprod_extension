@@ -7,6 +7,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, device, n
     train_losses, val_losses = [], []
 
     for epoch in range(num_epochs):
+        model.train()     # Ensure model is in training mode (prevent a previous bug!)
         running_loss = 0.0
         for inputs, labels in train_loader:
             inputs, labels = inputs.to(device), labels.to(device)
@@ -40,6 +41,7 @@ def evaluate_loss(model, data_loader, criterion, device):
             loss = criterion(outputs, labels)
             running_loss += loss.item() * inputs.size(0)
 
+    model.train()
     total_loss = running_loss / len(data_loader.dataset)
     return total_loss
 

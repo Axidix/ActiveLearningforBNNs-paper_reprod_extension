@@ -94,26 +94,27 @@ def acquire_and_add_points(model, T, pool_loader, acquisition_function, num_poin
     """Acquire new points from the pool set using the specified acquisition function and add them to the training set.
     Uses MC Dropout with T forward passes to get predictions."""
     
-    if bayesian: model.train()   # Keep dropout for MC Dropout
-    else: model.eval()  # Deterministic model
-    all_predictions = []
+    if bayesian:
+        model.train()   # Keep dropout for MC Dropout
+    else:
+        model.eval()  # Deterministic model
 
+    preds_list = []
     with torch.no_grad():
         for data, _ in pool_loader:
             data = data.to(device)
             B = data.size(0)
-            # Repeat batch T times for vectorized MC dropout
-            data_repeat = data.repeat((T, 1, 1, 1))  # (T*B, ...)
-            output = model(data_repeat)
-            probs = torch.softmax(output, dim=1)
-            # Reshape to (T, B, C)
-            preds = probs.view(T, B, -1).cpu()
-            all_predictions.append(preds)
+            # Efficient batch expansion (no copy)
+            data_rep = data.unsqueeze(0).expand(T, *data.shape).reshape(T*B, *data.shape[1:])
+            logits = model(data_rep)
+            probs = torch.softmax(logits, dim=1)
+            probs = probs.view(T, B, -1)  # (T, B, C)
+            preds_list.append(probs.cpu())
 
-    all_predictions = torch.cat(all_predictions, dim=1)  # Shape: (T, num_pool_samples, num_classes)
+    all_predictions = torch.cat(preds_list, dim=1)  # (T, N, C)
     print("Predictions computed.")
 
-    # Get acquisition scores
+    # Use existing acquisition function implementations
     top_indices = get_acquisition_points(acquisition_function, all_predictions, num_points=num_points)
     top_indices = top_indices.tolist()
 

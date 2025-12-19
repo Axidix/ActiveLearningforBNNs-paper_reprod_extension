@@ -44,6 +44,7 @@ if __name__ == "__main__":
 	plt.xlabel("Number of acquired images")
 	plt.ylabel("Test Accuracy (%)")
 	plt.title("MNIST Test Accuracy vs. Number of Acquired Images")
+	plt.ylim(bottom=70)
 	plt.legend()
 	plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
 	plt.minorticks_on()

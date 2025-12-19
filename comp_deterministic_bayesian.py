@@ -7,7 +7,7 @@ import numpy as np
 PLOT_DIR = "plots"
 
 if __name__ == "__main__":
-    acq_functions = ["bald", "variation_ratios", "entropy", "mean_std", "random"]
+    acq_functions = ["bald", "variation_ratios", "entropy"]
     num_acq_steps = 100
     acq_size = 10
     num_repeats = 3
