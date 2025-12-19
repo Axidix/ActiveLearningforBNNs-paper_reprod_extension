@@ -1,0 +1,4 @@
+plots_1/
+plots/
+*.pyc
+__pycache__/

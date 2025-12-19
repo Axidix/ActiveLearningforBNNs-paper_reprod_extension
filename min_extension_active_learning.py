@@ -14,8 +14,8 @@ def to_one_hot(y, num_classes=10):
 
 def run_min_extension_active_learning(
     heads=("analytic", "mfvi"),
-    acq_strategies=("variance", "random"),
-    num_acq_steps=20,
+    acq_strategies=("trace_total", "trace_epistemic_norm", "random"),
+    num_acq_steps=100,
     acq_size=10,
     num_train_samples=20,
     num_val_samples=100,
@@ -30,6 +30,9 @@ def run_min_extension_active_learning(
     num_repeats=1,
     seed=42
 ):
+    # Create a subfolder for this experiment's params
+    exp_name = f"steps{num_acq_steps}_acq{acq_size}_sigma2{sigma2}_s2{s2}_ntrain{num_train_samples}_seed{seed}"
+    plot_dir = os.path.join(plot_dir, exp_name)
     os.makedirs(plot_dir, exist_ok=True)
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -80,8 +83,10 @@ def run_min_extension_active_learning(
         test_targets.append(to_one_hot(y.to(device), num_classes=10))
     Phi_test = torch.cat(test_features, dim=0)
     Y_test = torch.cat(test_targets, dim=0)
-    # Main experiment loop: head ∈ {analytic, mfvi}, acq ∈ {variance, random}
+    
+    # Main experiment loop
     results = {}
+    acquired_labels = {}  # For class histograms
     for head in heads:
         for acq in acq_strategies:
             key = f"{head}_{acq}"
@@ -90,6 +95,8 @@ def run_min_extension_active_learning(
                 labeled = list(train_indices)
                 pool = list(pool_indices)
                 bayes = BayesianLastLayer(sigma2=sigma2, s2=s2)
+                # For class histogram
+                acquired_labels[key] = []
                 # Round 0 eval
                 Phi_L = Phi_all[labeled]
                 Y_L = Y_all[labeled]
@@ -106,9 +113,11 @@ def run_min_extension_active_learning(
                     if acq == "random":
                         scores = torch.rand(len(pool))
                     else:
-                        scores = bayes.acquisition_score(Phi_U, params, mode=acq_mode)
+                        scores = bayes.acquisition_score(Phi_U, params, mode=acq)
                     top_idx = torch.topk(scores, acq_size).indices.tolist()
                     selected = [pool[i] for i in top_idx]
+                    # Log acquired labels for histogram
+                    acquired_labels[key].extend([orig_trainset[pool[i]][1] for i in top_idx])
                     labeled.extend(selected)
                     selected_set = set(selected)
                     pool = [idx for idx in pool if idx not in selected_set]
@@ -124,25 +133,62 @@ def run_min_extension_active_learning(
                     results[key]["rmse"].append(rmse)
                     print(f"{key} | Repeat {repeat+1} | Round {acq_round+1} | Labeled: {len(labeled)} | RMSE: {rmse:.4f}")
 
-    # Plot
+    # Plot A: analytic_trace vs mfvi_trace
     plt.figure(figsize=(8, 6))
-    for key in results:
-        plt.plot(results[key]["num_labeled"], results[key]["rmse"], label=key)
+    for head in ["analytic", "mfvi"]:
+        key = f"{head}_trace_total"
+        if key in results:
+            plt.plot(results[key]["num_labeled"], results[key]["rmse"], label=key)
     plt.xlabel("Number of labeled samples")
     plt.ylabel("Test RMSE")
-    plt.title("Active Learning with Bayesian Last Layer (Minimal Extension)")
+    plt.title("Analytic vs MFVI (Trace Acquisition)")
     plt.legend()
     plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
     plt.tight_layout()
-    plot_path = os.path.join(plot_dir, "min_extension_active_learning.png")
+    plot_path = os.path.join(plot_dir, "analytic_vs_mfvi_trace.png")
     plt.savefig(plot_path)
-    print(f"Plot saved to {plot_path}")
+    print(f"Plot A saved to {plot_path}")
+
+    # Plot B: compare all acquisition methods for each inference
+    for head in ["analytic", "mfvi"]:
+        plt.figure(figsize=(8, 6))
+        for acq in ["trace_total", "trace_epistemic_norm", "random"]:
+            key = f"{head}_{acq}"
+            if key in results:
+                plt.plot(results[key]["num_labeled"], results[key]["rmse"], label=acq)
+        plt.xlabel("Number of labeled samples")
+        plt.ylabel("Test RMSE")
+        plt.title(f"{head.capitalize()} Inference: Acquisition Comparison")
+        plt.legend()
+        plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
+        plt.tight_layout()
+        plot_path = os.path.join(plot_dir, f"{head}_acquisition_comparison.png")
+        plt.savefig(plot_path)
+        print(f"Plot B saved to {plot_path}")
+
     # Save metrics
     for key in results:
         np.savetxt(os.path.join(plot_dir, f"rmse_{key}.txt"),
                    np.column_stack([results[key]["num_labeled"], results[key]["rmse"]]),
                    header="num_labeled\trmse")
     print(f"Metrics saved to {plot_dir}")
+
+    # Save class histograms (text and plot)
+    for key, labels in acquired_labels.items():
+        hist, _ = np.histogram(labels, bins=np.arange(11)-0.5)
+        np.savetxt(os.path.join(plot_dir, f"acquired_hist_{key}.txt"), hist, fmt='%d', header="class_histogram_0-9")
+        # Plot histogram
+        plt.figure(figsize=(6, 4))
+        plt.bar(np.arange(10), hist, color='C0', alpha=0.8)
+        plt.xlabel('Class label')
+        plt.ylabel('Count')
+        plt.title(f'Acquired label histogram: {key}')
+        plt.xticks(np.arange(10))
+        plt.tight_layout()
+        plot_path = os.path.join(plot_dir, f"acquired_hist_{key}.png")
+        plt.savefig(plot_path)
+        plt.close()
+        print(f"Histogram plot saved to {plot_path}")
 
 # Efficient RMSE using cached features/targets
 def eval_rmse_cached(Phi_test, Y_test, bayes, params, device):
@@ -153,4 +199,14 @@ def eval_rmse_cached(Phi_test, Y_test, bayes, params, device):
     return rmse
 
 if __name__ == "__main__":
-    run_min_extension_active_learning()
+    std_grid = [0.1, 1, 10]
+    train_samples_grid = [20, 100, 1000]
+    for sigma2 in std_grid:
+        for s2 in std_grid:
+            for num_train_samples in train_samples_grid:
+                print(f"Running: sigma2={sigma2}, s2={s2}, num_train_samples={num_train_samples}")
+                run_min_extension_active_learning(
+                    sigma2=sigma2,
+                    s2=s2,
+                    num_train_samples=num_train_samples
+                )

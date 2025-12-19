@@ -20,24 +20,27 @@ class BayesianLastLayer:
         # posterior mean
         mu = Sigma @ (Phi.T @ Y) / self.sigma2
 
-        return mu, Sigma
+        return {"type": "analytic", "mu": mu, "Sigma": Sigma}
 
 
     def fit_mfvi(self, Phi, Y):
         """
         Returns optimal mean and diagonal covariance for MFVI posterior approximation.
+        Correct: mean matches analytic, covariance is diagonal approx.
         """
-        # diagonal of Phi^T Phi
-        Phi_sq = torch.sum(Phi ** 2, dim=0)
+        N, K = Phi.shape
+        I = torch.eye(K, device=Phi.device)
 
-        # optimal diagonal covariance
-        S_diag = 1.0 / (Phi_sq / self.sigma2 + 1.0 / self.s2)
+        A = (Phi.T @ Phi) / self.sigma2 + I / self.s2         # (K,K)
+        B = (Phi.T @ Y) / self.sigma2                        # (K,D)
 
-        # optimal mean
-        M = (Phi.T @ Y) / self.sigma2
-        M = S_diag[:, None] * M
+        # MFVI mean = analytic mean (solve full system)
+        M = torch.linalg.solve(A, B)                         # (K,D)
 
-        return M, S_diag
+        # Diagonal covariance approximation (classic mean-field)
+        S_diag = 1.0 / torch.diag(A)                         # (K,)
+
+        return {"type": "mfvi", "M": M, "S_diag": S_diag}
 
 
     def predictive(self, Phi_star, params, return_cov=False):
@@ -50,19 +53,17 @@ class BayesianLastLayer:
             Phi_star = Phi_star.unsqueeze(0)
             single = True
 
-        # analytic
-        if len(params) == 2 and params[1].ndim == 2:
-            mu, Sigma = params
+        if params["type"] == "analytic":
+            mu, Sigma = params["mu"], params["Sigma"]
             mean = Phi_star @ mu
-            # var = sigma2 + phi^T Sigma phi (batched)
             tmp = Phi_star @ Sigma
             var = self.sigma2 + (tmp * Phi_star).sum(dim=1)
-
-        # mfvi
-        else:
-            M, S_diag = params
+        elif params["type"] == "mfvi":
+            M, S_diag = params["M"], params["S_diag"]
             mean = Phi_star @ M
-            var = self.sigma2 + (S_diag * (Phi_star ** 2)).sum(dim=1)
+            var = self.sigma2 + (Phi_star ** 2) @ S_diag
+        else:
+            raise ValueError(f"Unknown params type: {params.get('type', None)}")
 
         if single:
             mean = mean.squeeze(0)
@@ -81,15 +82,30 @@ class BayesianLastLayer:
         return mean, var, cov
     
 
-    def acquisition_score(self, Phi_star, params, mode="trace"):
-        """Computes acquisition score based on predictive variance."""
-        
+    def acquisition_score(self, Phi_star, params, mode="trace_total"):
+        """Computes acquisition score based on predictive variance.
+        Modes:
+            'trace_total': uses total predictive variance (aleatoric + epistemic)
+            'trace_epistemic': uses only epistemic variance (removes sigma2)
+            'det': var**D
+            'max': var
+        """
         mean, var = self.predictive(Phi_star, params)  # mean: (B,D) or (D,), var: (B,) or scalar
-
         D = mean.shape[-1]
 
-        if mode == "trace":
+        if mode == "trace_total":
             return var * D
+
+        if mode == "trace_epistemic":
+            epi = var - self.sigma2
+            epi = torch.clamp(epi, min=0.0)  # numerical safety
+            return epi * D
+
+        if mode == "trace_epistemic_norm":
+            epi = var - self.sigma2
+            epi = torch.clamp(epi, min=0.0)
+            norm2 = (Phi_star ** 2).sum(dim=1) + 1e-8
+            return (epi / norm2) * D
 
         if mode == "det":
             return var**D
@@ -97,5 +113,5 @@ class BayesianLastLayer:
         if mode == "max":
             return var
 
-        raise ValueError("Unknown acquisition mode")
+        raise ValueError(f"Unknown acquisition mode: {mode}")
 
