@@ -90,43 +90,67 @@ def get_acquisition_points(acq_function, predictions, num_points=10):
 
 
 
-def acquire_and_add_points(model, T, pool_loader, acquisition_function, num_points, device, train_indices, pool_indices, bayesian=True):
+def acquire_and_add_points(
+    model,
+    T,
+    pool_loader,
+    acquisition_function,
+    num_points,
+    device,
+    train_indices,
+    pool_indices,
+    bayesian=True,
+):
     """Acquire new points from the pool set using the specified acquisition function and add them to the training set.
     Uses MC Dropout with T forward passes to get predictions."""
-    
-    if bayesian:
-        model.train()   # Keep dropout for MC Dropout
-    else:
-        model.eval()  # Deterministic model
 
-    preds_list = []
-    with torch.no_grad():
-        for data, _ in pool_loader:
-            data = data.to(device)
-            B = data.size(0)
-            # Efficient batch expansion (no copy)
-            data_rep = data.unsqueeze(0).expand(T, *data.shape).reshape(T*B, *data.shape[1:])
-            logits = model(data_rep)
-            probs = torch.softmax(logits, dim=1)
-            probs = probs.view(T, B, -1)  # (T, B, C)
-            preds_list.append(probs.cpu())
-
-    all_predictions = torch.cat(preds_list, dim=1)  # (T, N, C)
-    print("Predictions computed.")
-
-    # Use existing acquisition function implementations
-    top_indices = get_acquisition_points(acquisition_function, all_predictions, num_points=num_points)
-    top_indices = top_indices.tolist()
-
-    # Map back to original dataset indices
+    # Map from pool-loader order back to original dataset indices (pool_loader.dataset is a Subset)
     pool_dataset_indices = pool_loader.dataset.indices
+    pool_size = len(pool_dataset_indices)
+    if pool_size == 0:
+        return train_indices, pool_indices
+
+    k = min(int(num_points), pool_size)
+
+    # Random acquisition: no need to compute predictions at all
+    if acquisition_function is random_acquisition:
+        top_indices = torch.randperm(pool_size)[:k].tolist()
+
+    else:
+        # MC-dropout vs deterministic mode
+        if bayesian:
+            model.train()   # keep dropout on
+        else:
+            model.eval()    # dropout off
+
+        preds_list = []
+        with torch.no_grad():
+            for data, _ in pool_loader:
+                data = data.to(device)
+                B = data.size(0)
+
+                # Expand without materializing T copies (expand is a view)
+                data_rep = data.unsqueeze(0).expand(T, *data.shape).reshape(T * B, *data.shape[1:])
+
+                logits = model(data_rep)
+                probs = torch.softmax(logits, dim=1).view(T, B, -1)  # (T, B, C)
+                preds_list.append(probs.cpu())
+
+        all_predictions = torch.cat(preds_list, dim=1)  # (T, N, C)
+        print("Predictions computed.")
+
+        # Your existing selection logic (keeps tie-handling)
+        top_indices = get_acquisition_points(acquisition_function, all_predictions, num_points=k).tolist()
+
+    # Convert selected pool positions to original dataset indices
     acquired_indices = [pool_dataset_indices[i] for i in top_indices]
 
     # Add acquired indices to training set
     train_indices.extend(acquired_indices)
 
-    # Remove acquired indices from pool set
-    pool_indices[:] = list(set(pool_indices) - set(acquired_indices))
-    print("Acquired points added to training set.")
+    # Remove acquired indices from pool set (stable order, avoids set() scrambling)
+    acquired_set = set(acquired_indices)
+    pool_indices[:] = [i for i in pool_indices if i not in acquired_set]
 
+    print("Acquired points added to training set.")
     return train_indices, pool_indices
