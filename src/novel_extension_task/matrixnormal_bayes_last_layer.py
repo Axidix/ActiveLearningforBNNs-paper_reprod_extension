@@ -223,15 +223,14 @@ class MatrixNormalBayesianLastLayer:
         prev_U_diag = U_diag.clone()
         prev_V = V.clone()
 
+        # Precompute M (does not depend on U or V)
+        A = (1.0 / self.sigma2) * G
+        B = (1.0 / self.s2) * V0_inv
+        RHS = (1.0 / self.sigma2) * C
+        M_np = solve_sylvester(_to_numpy(A), _to_numpy(B), _to_numpy(RHS))
+        M = _to_torch(M_np, device, dtype)
+
         for it in range(int(num_iters)):
-            # M update: solve sylvester
-            A = (1.0 / self.sigma2) * G
-            B = (1.0 / self.s2) * V0_inv
-            RHS = (1.0 / self.sigma2) * C
-
-            M_np = solve_sylvester(_to_numpy(A), _to_numpy(B), _to_numpy(RHS))
-            M = _to_torch(M_np, device, dtype)
-
             # U update (diagonal)
             tr_v = torch.trace(V0_inv @ V).clamp(min=eps)
             scale = float(D) / tr_v
@@ -249,13 +248,31 @@ class MatrixNormalBayesianLastLayer:
             V = 0.5 * (V + V.T)
 
             # Track relative parameter changes
-            delta_M = (M - prev_M).norm() / (prev_M.norm() + eps)
             delta_U = (U_diag - prev_U_diag).norm() / (prev_U_diag.norm() + eps)
             delta_V = (V - prev_V).norm() / (prev_V.norm() + eps)
-            if verbose:
-                print(f"MFVI iter {it+1}: rel_change M={delta_M:.3e}, U_diag={delta_U:.3e}, V={delta_V:.3e}")
 
-            prev_M = M.clone()
+            # Diagnostics
+            tr_V0inv_V = torch.trace(V0_inv @ V).item()
+            tr_V = torch.trace(V).item()
+            min_eig_V = torch.linalg.eigvalsh(V).min().item()
+            # mean(c(x)) over a small random batch from Phi
+            if N > 0:
+                idx = torch.randperm(N)[:min(32, N)]
+                Phi_batch = Phi[idx]
+                c_x = (Phi_batch * Phi_batch) @ U_diag
+                mean_cx = c_x.mean().item()
+            else:
+                mean_cx = float('nan')
+
+            if verbose:
+                print(f"MFVI iter {it+1}: rel_change U_diag={delta_U:.3e}, V={delta_V:.3e} | tr(V0_inv@V)={tr_V0inv_V:.3e} tr(V)={tr_V:.3e} min_eig(V)={min_eig_V:.3e} mean_c(x)={mean_cx:.3e}")
+
+            # Early stopping if converged
+            if (delta_U < 1e-3) and (delta_V < 1e-3):
+                if verbose:
+                    print(f"Converged at iter {it+1} (delta_U < 1e-3 and delta_V < 1e-3)")
+                break
+
             prev_U_diag = U_diag.clone()
             prev_V = V.clone()
 

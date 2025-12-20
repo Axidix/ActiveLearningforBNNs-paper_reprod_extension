@@ -393,7 +393,7 @@ if __name__ == "__main__":
         s2=1.0,
         a=1.0,
         b_grid=(-0.06, 0.0),
-        mfvi_iters=8,
+        mfvi_iters=5,
         num_repeats=1,
         seed=42,
         num_pretrain_epochs=15
