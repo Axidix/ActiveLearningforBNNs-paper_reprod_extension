@@ -17,7 +17,7 @@ def run_experiment_once(acq_function, num_acq_steps, acq_size, num_epochs, T):
     # Create data loaders
     train_loader, val_loader, pool_loader, test_loader = get_data_loaders(
         orig_trainset, testset, train_indices, val_indices, pool_indices,
-        train_batch_size=16, val_batch_size=16, pool_batch_size=512, test_batch_size=256
+        train_batch_size=16, val_batch_size=16, pool_batch_size=256, test_batch_size=256
     )
     print("Initial data loaders created.")
 
@@ -47,7 +47,7 @@ def run_experiment_once(acq_function, num_acq_steps, acq_size, num_epochs, T):
         # Update data loaders with new indices
         train_loader, val_loader, pool_loader, _ = get_data_loaders(
             orig_trainset, testset, train_indices, val_indices, pool_indices,
-            train_batch_size=16, val_batch_size=16, pool_batch_size=512, test_batch_size=256
+            train_batch_size=16, val_batch_size=16, pool_batch_size=256, test_batch_size=256
         )
         print("Data loaders updated.")
 
@@ -90,7 +90,7 @@ def run_exp_deterministic_once(acq_function, num_acq_steps, acq_size, num_epochs
     # Create data loaders
     train_loader, val_loader, pool_loader, test_loader = get_data_loaders(
         orig_trainset, testset, train_indices, val_indices, pool_indices,
-        train_batch_size=16, val_batch_size=16, pool_batch_size=512, test_batch_size=1024
+        train_batch_size=16, val_batch_size=16, pool_batch_size=256, test_batch_size=1024
     )
     print("Initial data loaders created.")
 
@@ -120,7 +120,7 @@ def run_exp_deterministic_once(acq_function, num_acq_steps, acq_size, num_epochs
         # Update data loaders with new indices
         train_loader, val_loader, pool_loader, _ = get_data_loaders(
             orig_trainset, testset, train_indices, val_indices, pool_indices,
-            train_batch_size=16, val_batch_size=16, pool_batch_size=512, test_batch_size=1024
+            train_batch_size=16, val_batch_size=16, pool_batch_size=256, test_batch_size=1024
         )
         print("Data loaders updated.")
 
