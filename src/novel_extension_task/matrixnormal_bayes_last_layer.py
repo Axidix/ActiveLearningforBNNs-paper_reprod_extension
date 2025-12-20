@@ -231,6 +231,7 @@ class MatrixNormalBayesianLastLayer:
         M = _to_torch(M_np, device, dtype)
 
         for it in range(int(num_iters)):
+
             # U update (diagonal)
             tr_v = torch.trace(V0_inv @ V).clamp(min=eps)
             scale = float(D) / tr_v
@@ -238,8 +239,11 @@ class MatrixNormalBayesianLastLayer:
             U_diag = scale / denom.clamp(min=eps)
 
             # V update (full)
-            tr_UG = (U_diag * diagG).sum()
-            tr_U = U_diag.sum()
+            tr_UG = (U_diag * diagG).sum().item()
+            tr_U = U_diag.sum().item()
+
+            if verbose:
+                print(f"[MFVI] iter {it+1}: scale={scale:.5f}, tr_UG={tr_UG:.5f}, tr_U={tr_U:.5f}")
 
             mat = (tr_UG / self.sigma2) * torch.eye(D, device=device, dtype=dtype) + (tr_U / self.s2) * V0_inv
             V = float(K) * torch.linalg.inv(mat)
@@ -268,9 +272,9 @@ class MatrixNormalBayesianLastLayer:
                 print(f"MFVI iter {it+1}: rel_change U_diag={delta_U:.3e}, V={delta_V:.3e} | tr(V0_inv@V)={tr_V0inv_V:.3e} tr(V)={tr_V:.3e} min_eig(V)={min_eig_V:.3e} mean_c(x)={mean_cx:.3e}")
 
             # Early stopping if converged
-            if (delta_U < 1e-3) and (delta_V < 1e-3):
+            if (delta_U < 1e-4) and (delta_V < 1e-4):
                 if verbose:
-                    print(f"Converged at iter {it+1} (delta_U < 1e-3 and delta_V < 1e-3)")
+                    print(f"Converged at iter {it+1} (delta_U < 1e-4 and delta_V < 1e-4)")
                 break
 
             prev_U_diag = U_diag.clone()

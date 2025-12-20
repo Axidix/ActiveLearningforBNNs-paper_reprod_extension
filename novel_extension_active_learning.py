@@ -170,10 +170,12 @@ def run_novel_extension_active_learning(
         # Subfolders for metrics and plots
         metrics_root = os.path.join(plot_dir, "metrics")
         os.makedirs(metrics_root, exist_ok=True)
-        metrics_dirs = {m: os.path.join(metrics_root, m) for m in ["rmse", "nll", "accuracy"]}
+        # Ensure all metrics used in plotting are present in dirs
+        metric_names = ["rmse", "nll", "acc", "accuracy"]
+        metrics_dirs = {m: os.path.join(metrics_root, m) for m in metric_names}
         for d in metrics_dirs.values():
             os.makedirs(d, exist_ok=True)
-        plots_dirs = {m: os.path.join(plot_dir, m) for m in ["rmse", "nll", "accuracy"]}
+        plots_dirs = {m: os.path.join(plot_dir, m) for m in metric_names}
         for d in plots_dirs.values():
             os.makedirs(d, exist_ok=True)
 
@@ -393,7 +395,7 @@ if __name__ == "__main__":
         s2=1.0,
         a=1.0,
         b_grid=(-0.06, 0.0),
-        mfvi_iters=5,
+        mfvi_iters=10,
         num_repeats=1,
         seed=42,
         num_pretrain_epochs=15

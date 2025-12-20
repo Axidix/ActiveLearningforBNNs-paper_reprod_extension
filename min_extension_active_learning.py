@@ -23,7 +23,7 @@ def run_min_extension_active_learning(
     pool_batch_size=256,
     test_batch_size=256,
     device="cuda" if torch.cuda.is_available() else "cpu",
-    plot_dir="plots/min_extension_task",
+    plot_root="plots/min_extension_task",
     sigma2=1.0,
     s2=1.0,
     acq_mode="trace",
@@ -32,8 +32,18 @@ def run_min_extension_active_learning(
 ):
     # Create a subfolder for this experiment's params
     exp_name = f"steps{num_acq_steps}_acq{acq_size}_sigma2{sigma2}_s2{s2}_ntrain{num_train_samples}_seed{seed}"
-    plot_dir = os.path.join(plot_dir, exp_name)
+    plot_dir = os.path.join(plot_root, exp_name)
     os.makedirs(plot_dir, exist_ok=True)
+    # Subfolders for metrics and plots
+    metrics_root = os.path.join(plot_dir, "metrics")
+    os.makedirs(metrics_root, exist_ok=True)
+    metric_names = ["rmse", "nll", "acc", "accuracy"]
+    metrics_dirs = {m: os.path.join(metrics_root, m) for m in metric_names}
+    for d in metrics_dirs.values():
+        os.makedirs(d, exist_ok=True)
+    plots_dirs = {m: os.path.join(plot_dir, m) for m in metric_names}
+    for d in plots_dirs.values():
+        os.makedirs(d, exist_ok=True)
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
@@ -90,12 +100,11 @@ def run_min_extension_active_learning(
     for head in heads:
         for acq in acq_strategies:
             key = f"{head}_{acq}"
-            results[key] = {"num_labeled": [], "rmse": []}
+            results[key] = {"num_labeled": [], "rmse": [], "nll": [], "acc": []}
             for repeat in range(num_repeats):
                 labeled = list(train_indices)
                 pool = list(pool_indices)
                 bayes = BayesianLastLayer(sigma2=sigma2, s2=s2)
-                # For class histogram
                 acquired_labels[key] = []
                 # Round 0 eval
                 Phi_L = Phi_all[labeled]
@@ -105,9 +114,13 @@ def run_min_extension_active_learning(
                 elif head == "mfvi":
                     params = bayes.fit_mfvi(Phi_L, Y_L)
                 rmse = eval_rmse_cached(Phi_test, Y_test, bayes, params, device)
+                nll = eval_gaussian_nll_cached(Phi_test, Y_test, bayes, params, head)
+                acc = eval_accuracy_cached(Phi_test, Y_test, bayes, params, head)
                 results[key]["num_labeled"].append(len(labeled))
                 results[key]["rmse"].append(rmse)
-                print(f"{key} | Repeat {repeat+1} | Round 0 | Labeled: {len(labeled)} | RMSE: {rmse:.4f}")
+                results[key]["nll"].append(nll)
+                results[key]["acc"].append(acc)
+                print(f"{key} | Repeat {repeat+1} | Round 0 | Labeled: {len(labeled)} | RMSE: {rmse:.4f} | NLL: {nll:.4f} | Acc: {acc:.4f}")
                 for acq_round in range(num_acq_steps):
                     Phi_U = Phi_all[pool]
                     if acq == "random":
@@ -116,7 +129,6 @@ def run_min_extension_active_learning(
                         scores = bayes.acquisition_score(Phi_U, params, mode=acq)
                     top_idx = torch.topk(scores, acq_size).indices.tolist()
                     selected = [pool[i] for i in top_idx]
-                    # Log acquired labels for histogram
                     acquired_labels[key].extend([orig_trainset[pool[i]][1] for i in top_idx])
                     labeled.extend(selected)
                     selected_set = set(selected)
@@ -129,55 +141,53 @@ def run_min_extension_active_learning(
                     elif head == "mfvi":
                         params = bayes.fit_mfvi(Phi_L, Y_L)
                     rmse = eval_rmse_cached(Phi_test, Y_test, bayes, params, device)
+                    nll = eval_gaussian_nll_cached(Phi_test, Y_test, bayes, params, head)
+                    acc = eval_accuracy_cached(Phi_test, Y_test, bayes, params, head)
                     results[key]["num_labeled"].append(len(labeled))
                     results[key]["rmse"].append(rmse)
-                    print(f"{key} | Repeat {repeat+1} | Round {acq_round+1} | Labeled: {len(labeled)} | RMSE: {rmse:.4f}")
+                    results[key]["nll"].append(nll)
+                    results[key]["acc"].append(acc)
+                    print(f"{key} | Repeat {repeat+1} | Round {acq_round+1} | Labeled: {len(labeled)} | RMSE: {rmse:.4f} | NLL: {nll:.4f} | Acc: {acc:.4f}")
 
-    # Plot A: analytic_trace vs mfvi_trace
-    plt.figure(figsize=(8, 6))
-    for head in ["analytic", "mfvi"]:
-        key = f"{head}_trace_total"
-        if key in results:
-            plt.plot(results[key]["num_labeled"], results[key]["rmse"], label=key)
-    plt.xlabel("Number of labeled samples")
-    plt.ylabel("Test RMSE")
-    plt.title("Analytic vs MFVI (Trace Acquisition)")
-    plt.legend()
-    plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
-    plt.tight_layout()
-    plot_path = os.path.join(plot_dir, "analytic_vs_mfvi_trace.png")
-    plt.savefig(plot_path)
-    print(f"Plot A saved to {plot_path}")
-
-    # Plot B: compare all acquisition methods for each inference
-    for head in ["analytic", "mfvi"]:
-        plt.figure(figsize=(8, 6))
-        for acq in ["trace_total", "trace_epistemic_norm", "random"]:
-            key = f"{head}_{acq}"
-            if key in results:
-                plt.plot(results[key]["num_labeled"], results[key]["rmse"], label=acq)
-        plt.xlabel("Number of labeled samples")
-        plt.ylabel("Test RMSE")
-        plt.title(f"{head.capitalize()} Inference: Acquisition Comparison")
-        plt.legend()
-        plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
-        plt.tight_layout()
-        plot_path = os.path.join(plot_dir, f"{head}_acquisition_comparison.png")
-        plt.savefig(plot_path)
-        print(f"Plot B saved to {plot_path}")
-
+    # --- plots for each metric
+    for metric, ylabel in zip(["rmse", "nll", "acc"], ["Test RMSE", "Test Gaussian NLL", "Test Accuracy"]):
+        for head in ["analytic", "mfvi"]:
+            plt.figure(figsize=(8, 6))
+            for acq in acq_strategies:
+                key = f"{head}_{acq}"
+                if key not in results:
+                    continue
+                xs = results[key]["num_labeled"]
+                ys = results[key][metric]
+                plt.plot(xs, ys, label=acq)
+            plt.xlabel("Number of labeled samples")
+            plt.ylabel(ylabel)
+            plt.title(f"{head} inference | acquisition comparison")
+            plt.legend()
+            plt.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.7)
+            plt.tight_layout()
+            plt.savefig(os.path.join(plots_dirs[metric], f"{metric}_{head}.png"))
+            plt.close()
     # Save metrics
     for key in results:
-        np.savetxt(os.path.join(plot_dir, f"rmse_{key}.txt"),
-                   np.column_stack([results[key]["num_labeled"], results[key]["rmse"]]),
-                   header="num_labeled\trmse")
-    print(f"Metrics saved to {plot_dir}")
-
+        # RMSE: always present
+        arr = np.column_stack([results[key]["num_labeled"], results[key]["rmse"]])
+        np.savetxt(os.path.join(metrics_dirs["rmse"], f"rmse_{key}.txt"), arr, header="num_labeled\trmse")
+        # NLL/acc: only save non-None values
+        xs_nll = [x for x, y in zip(results[key]["num_labeled"], results[key]["nll"]) if y is not None]
+        ys_nll = [y for y in results[key]["nll"] if y is not None]
+        if xs_nll:
+            arr_nll = np.column_stack([xs_nll, ys_nll])
+            np.savetxt(os.path.join(metrics_dirs["nll"], f"nll_{key}.txt"), arr_nll, header="num_labeled\tnll")
+        xs_acc = [x for x, y in zip(results[key]["num_labeled"], results[key]["acc"]) if y is not None]
+        ys_acc = [y for y in results[key]["acc"] if y is not None]
+        if xs_acc:
+            arr_acc = np.column_stack([xs_acc, ys_acc])
+            np.savetxt(os.path.join(metrics_dirs["accuracy"], f"acc_{key}.txt"), arr_acc, header="num_labeled\tacc")
     # Save class histograms (text and plot)
     for key, labels in acquired_labels.items():
         hist, _ = np.histogram(labels, bins=np.arange(11)-0.5)
         np.savetxt(os.path.join(plot_dir, f"acquired_hist_{key}.txt"), hist, fmt='%d', header="class_histogram_0-9")
-        # Plot histogram
         plt.figure(figsize=(6, 4))
         plt.bar(np.arange(10), hist, color='C0', alpha=0.8)
         plt.xlabel('Class label')
@@ -185,21 +195,57 @@ def run_min_extension_active_learning(
         plt.title(f'Acquired label histogram: {key}')
         plt.xticks(np.arange(10))
         plt.tight_layout()
-        plot_path = os.path.join(plot_dir, f"acquired_hist_{key}.png")
-        plt.savefig(plot_path)
+        plt.savefig(os.path.join(plot_dir, f"acquired_hist_{key}.png"))
         plt.close()
-        print(f"Histogram plot saved to {plot_path}")
+        print(f"Histogram plot saved to {os.path.join(plot_dir, f'acquired_hist_{key}.png')}")
+
 
 # Efficient RMSE using cached features/targets
 def eval_rmse_cached(Phi_test, Y_test, bayes, params, device):
-    # Phi_test: (N, K), Y_test: (N, D)
     mean, _ = bayes.predictive(Phi_test, params)
     diff2 = (mean - Y_test) ** 2
     rmse = (diff2.sum().item() / diff2.numel()) ** 0.5
     return rmse
 
+def eval_gaussian_nll_cached(Phi_test, Y_test, bayes, params, head):
+    # Efficient Gaussian NLL using analytic structure or MFVI
+    with torch.no_grad():
+        D = Y_test.shape[1]
+        if head == "analytic":
+            mean, var = bayes.predictive(Phi_test, params, return_cov=False)
+            nlls = []
+            for i in range(mean.shape[0]):
+                diff = (Y_test[i] - mean[i]).unsqueeze(0)  # (1,D)
+                evals = var[i] * torch.ones(D, device=mean.device)
+                evals = evals.clamp(min=1e-8)
+                quad = (diff * diff / evals).sum()
+                logdet = torch.log(evals).sum()
+                nll = 0.5 * (logdet + quad + D * np.log(2 * np.pi))
+                nlls.append(nll.item())
+            return float(np.mean(nlls))
+        else:
+            mean, var = bayes.predictive(Phi_test, params, return_cov=False)
+            nlls = []
+            for i in range(mean.shape[0]):
+                diff = (Y_test[i] - mean[i]).unsqueeze(0)
+                evals = var[i] * torch.ones(D, device=mean.device)
+                evals = evals.clamp(min=1e-8)
+                quad = (diff * diff / evals).sum()
+                logdet = torch.log(evals).sum()
+                nll = 0.5 * (logdet + quad + D * np.log(2 * np.pi))
+                nlls.append(nll.item())
+            return float(np.mean(nlls))
+
+def eval_accuracy_cached(Phi_test, Y_test, bayes, params, head):
+    # Predict class = argmax(mean), compare to true class
+    with torch.no_grad():
+        mean, _ = bayes.predictive(Phi_test, params, return_cov=False)
+        pred = mean.argmax(dim=1)
+        true = Y_test.argmax(dim=1)
+        return (pred == true).float().mean().item()
+
 if __name__ == "__main__":
-    std_grid = [0.1, 1, 10]
+    std_grid = [1]
     train_samples_grid = [20, 100, 1000]
     for sigma2 in std_grid:
         for s2 in std_grid:
