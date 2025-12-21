@@ -96,13 +96,14 @@ def run_novel_extension_active_learning(
     b_grid=(0.0, -0.05, -0.09),
     mfvi_iters=8,
     num_repeats=1,
-    seed=42,
+    seed=None,
     num_pretrain_epochs = 10
 ):
     os.makedirs(plot_root, exist_ok=True)
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
+    if seed is not None:
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        random.seed(seed)
 
     orig_trainset, testset, train_indices, val_indices, pool_indices = load_mnist(num_train_samples, num_val_samples)
     _, _, _, test_loader = get_data_loaders(

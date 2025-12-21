@@ -4,12 +4,12 @@ import matplotlib.pyplot as plt
 import os
 import numpy as np
 
-PLOT_DIR = "plots"
+PLOT_DIR = "plots_acq_comparison"
 PLOT_PATH = os.path.join(PLOT_DIR, "comparison_acq_fct.png")
 METRIC_PATH = os.path.join(PLOT_DIR, "comparison_acq_fct_metrics.txt")
 
 if __name__ == "__main__":
-	acq_functions = ["bald", "variation_ratios", "entropy", "mean_std", "random"]
+	acq_functions = ["bald", "mean_std", "random"]
 	num_acq_steps = 100
 	acq_size = 10
 	num_repeats = 3

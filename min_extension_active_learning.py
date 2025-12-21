@@ -28,7 +28,7 @@ def run_min_extension_active_learning(
     s2=1.0,
     acq_mode="trace",
     num_repeats=1,
-    seed=42
+    seed=None
 ):
     # Create a subfolder for this experiment's params
     exp_name = f"steps{num_acq_steps}_acq{acq_size}_sigma2{sigma2}_s2{s2}_ntrain{num_train_samples}_seed{seed}"
@@ -44,9 +44,10 @@ def run_min_extension_active_learning(
     plots_dirs = {m: os.path.join(plot_dir, m) for m in metric_names}
     for d in plots_dirs.values():
         os.makedirs(d, exist_ok=True)
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
+    if seed is not None:
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        random.seed(seed)
     orig_trainset, testset, train_indices, val_indices, pool_indices = load_mnist(num_train_samples, num_val_samples)
     _, _, _, test_loader = get_data_loaders(
         orig_trainset, testset, train_indices, val_indices, pool_indices,
