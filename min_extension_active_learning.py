@@ -23,11 +23,11 @@ def run_min_extension_active_learning(
     pool_batch_size=256,
     test_batch_size=256,
     device="cuda" if torch.cuda.is_available() else "cpu",
-    plot_root="plots/min_extension_task",
+    plot_root="plots_2/min_extension_task",
     sigma2=1.0,
     s2=1.0,
     acq_mode="trace",
-    num_repeats=1,
+    num_repeats=3,
     seed=None
 ):
     # Create a subfolder for this experiment's params
@@ -246,8 +246,8 @@ def eval_accuracy_cached(Phi_test, Y_test, bayes, params, head):
         return (pred == true).float().mean().item()
 
 if __name__ == "__main__":
-    std_grid = [1]
-    train_samples_grid = [20, 100, 1000]
+    std_grid = [0.1, 10.0]
+    train_samples_grid = [20, 50]
     for sigma2 in std_grid:
         for s2 in std_grid:
             for num_train_samples in train_samples_grid:
